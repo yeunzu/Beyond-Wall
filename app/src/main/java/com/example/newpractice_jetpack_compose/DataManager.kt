@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
 @Entity(tableName = "minimumInfo")
@@ -54,6 +55,10 @@ interface MinimumDao {
     // Flow 반환을 위한 함수
     @Query("SELECT * FROM minimumInfo WHERE settingKind = :name LIMIT 1")
     fun getSettingByNameFlow(name: String): Flow<MinimumInfo? >// nullable 타입
+
+    // 모든 설정값을 Flow로 가져오는 함수
+    @Query("SELECT * FROM minimumInfo")
+    fun getAllSettingFlow(): Flow<List<MinimumInfo>>
 }
 
 @Database(entities = [MinimumInfo::class], version = 1)
@@ -170,6 +175,17 @@ class SettingsViewModel @Inject constructor(
 //        }
 //    }
 
+    // DB의 모든 설정 값을 가져와 'setting_kind'를 key로, 'setting_value'를 value로 갖는 Map으로 변환
+    // 이 StateFlow가 모든 설정의 상태를 관리
+    val settingsMap: StateFlow<Map<String, String?>> = dao.getAllSettingFlow()
+        .map { settingsList ->
+            settingsList.associate { it.setting_kind to it.setting_value }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyMap()
+        )
 
     // 설정 값을 업데이트하고나, 없으면 새로 추가하는 함수 (Update + Insert => Upsert)
     fun upsertSetting(kind: String, value: String?) {

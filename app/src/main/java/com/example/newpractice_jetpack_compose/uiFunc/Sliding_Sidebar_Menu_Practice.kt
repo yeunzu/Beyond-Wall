@@ -56,7 +56,7 @@ fun SidebarDemo(navController: NavHostController) {
                 Text("Menu", fontWeight = FontWeight.Bold, modifier = Modifier.padding(16.dp))
                 HorizontalDivider()
                 Text(
-                    text = "Menu 1",
+                    text = "Settings",
                     textAlign = TextAlign.Left,
                     modifier = Modifier
                         .clickable {
@@ -126,7 +126,7 @@ fun SidebarDemo(navController: NavHostController) {
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Menu1")
+                Text("Settings")
             }
             Button(
                 onClick = {
