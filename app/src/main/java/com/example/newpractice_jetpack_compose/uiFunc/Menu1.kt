@@ -1,16 +1,19 @@
 package com.example.newpractice_jetpack_compose.uiFunc
 
 import android.widget.Toast
+import android.widget.ToggleButton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding // padding import 추가
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -20,6 +23,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold // Scaffold import 추가
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -119,6 +124,9 @@ fun SettingMenu(
         }
     }
 
+    // 셀룰러를 쓸 때 알림을 보낼 것인가(토글). DB에서 바로 바꿔쓰기
+    val noticeUseCellularDb = settingMap["notice_when_use_cellular"]?.toBoolean() ?: true
+
 
 
     Scaffold(
@@ -173,7 +181,7 @@ fun SettingMenu(
                     }
                     Text("Use English, numbers, and a few special characters (up to 20 characters)",
                         fontSize = 10.sp, modifier = Modifier.padding(start=4.dp, bottom = 2.dp))
-                    HorizontalDivider(modifier = Modifier.padding(2.dp))
+                    HorizontalDivider(modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 6.dp))
                 }
             }
             item {
@@ -228,7 +236,40 @@ fun SettingMenu(
                         }
                     }
                 }
-                HorizontalDivider(modifier = Modifier.padding(2.dp))
+                HorizontalDivider(modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 6.dp, bottom = 2.dp))
+            }
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Notice when use Cellular",
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .padding(4.dp)
+                    )
+                    Switch(
+                        checked = noticeUseCellularDb,
+                        onCheckedChange = { newValue ->
+                            settingsViewModel.upsertSetting("notice_when_use_cellular", newValue.toString())
+                        },
+                        thumbContent = if (noticeUseCellularDb) {
+                            {
+                                Icon(
+                                    imageVector = Icons.Filled.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                )
+                            }
+                        } else {
+                            null
+                        },
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
+                HorizontalDivider(modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 2.dp, bottom = 2.dp))
             }
         }
     }
