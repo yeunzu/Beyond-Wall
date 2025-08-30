@@ -24,7 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.example.newpractice_jetpack_compose.uiFunc.NavigationMenu1
+import com.example.newpractice_jetpack_compose.uiFunc.SettingMenu
 import com.example.newpractice_jetpack_compose.uiFunc.NavigationMenu2
 import com.example.newpractice_jetpack_compose.uiFunc.OnboardingScreen
 import com.example.newpractice_jetpack_compose.uiFunc.SidebarDemo
@@ -85,7 +85,7 @@ fun AppNavigation(startPage: String) {
             SidebarDemo(navController = navController)
         }
         composable("menu1") {
-            NavigationMenu1(navController = navController)
+            SettingMenu(navController = navController)
         }
         composable("menu2") {
             NavigationMenu2(navController = navController)

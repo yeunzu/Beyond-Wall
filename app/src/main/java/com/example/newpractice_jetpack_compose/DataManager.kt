@@ -1,24 +1,18 @@
 package com.example.newpractice_jetpack_compose
 
-import android.app.Application
 import android.content.Context
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Database
-import androidx.room.Delete
 import androidx.room.Entity
 import androidx.room.Insert
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import androidx.room.Update
-import androidx.room.util.query
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -31,8 +25,8 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
-import java.util.UUID
 
 @Entity(tableName = "minimumInfo")
 data class MinimumInfo(
@@ -61,6 +55,10 @@ interface MinimumDao {
     // Flow 반환을 위한 함수
     @Query("SELECT * FROM minimumInfo WHERE settingKind = :name LIMIT 1")
     fun getSettingByNameFlow(name: String): Flow<MinimumInfo? >// nullable 타입
+
+    // 모든 설정값을 Flow로 가져오는 함수
+    @Query("SELECT * FROM minimumInfo")
+    fun getAllSettingFlow(): Flow<List<MinimumInfo>>
 }
 
 @Database(entities = [MinimumInfo::class], version = 1)
@@ -131,8 +129,6 @@ class SettingsViewModel @Inject constructor(
 
             if (setting == null) {
                 // DB에 값이 없으면 최초 사용자. 여기서 DB 업데이트를 딱 한 번만 수행
-                // 여기서 DB를 업데이트하는 코드는 제거하고 상태만 변경
-                // dao.insertSetting(MinimumInfo(setting_kind = "isFirstEnter", setting_value = "false"))
                 _startupState.value = StartupState.FirstTimeUser
             } else {
                 // DB에 값이 있으면 기존 사용자
@@ -172,10 +168,34 @@ class SettingsViewModel @Inject constructor(
         _searchQuery.value = kind
     }
 
-    // DB 업데이트 함수 (이전과 동일)
-    fun updateSetting(kind: String, value: String) {
+//    // DB 업데이트 함수 (이전과 동일)
+//    fun updateSetting(kind: String, value: String) {
+//        viewModelScope.launch {
+//            dao.updateSettingValue(kind, value)
+//        }
+//    }
+
+    // DB의 모든 설정 값을 가져와 'setting_kind'를 key로, 'setting_value'를 value로 갖는 Map으로 변환
+    // 이 StateFlow가 모든 설정의 상태를 관리
+    val settingsMap: StateFlow<Map<String, String?>> = dao.getAllSettingFlow()
+        .map { settingsList ->
+            settingsList.associate { it.setting_kind to it.setting_value }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyMap()
+        )
+
+    // 설정 값을 업데이트하고나, 없으면 새로 추가하는 함수 (Update + Insert => Upsert)
+    fun upsertSetting(kind: String, value: String?) {
         viewModelScope.launch {
-            dao.updateSettingValue(kind, value)
+            val existingSetting = dao.getSettingByName(kind)
+            if (existingSetting == null) {
+                dao.insertSetting(MinimumInfo(setting_kind = kind, setting_value = value))
+            } else {
+                dao.updateSettingValue(kind, value)
+            }
         }
     }
 
@@ -188,7 +208,7 @@ class SettingsViewModel @Inject constructor(
 
 // UI는 절대로 DAO를 직접 호출하지 않는다. 항상 ViewModel을 통해서만 DB에 접근한다. : UI -> ViewModel -> Dao
 
-// SettingsViewModel은 생성자(constructor)에 dao를 필요오 함. 이런 경우 ViewModel을 만들기 위한 팩토리(Factory)가 필요.
+// SettingsViewModel은 생성자(constructor)에 dao를 필요로 함. 이런 경우 ViewModel을 만들기 위한 팩토리(Factory)가 필요.
 class SettingsViewModelFactory(private val dao: MinimumDao) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(SettingsViewModel::class.java)) {
