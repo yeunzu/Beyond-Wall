@@ -30,7 +30,9 @@ class BleViewModel @Inject constructor(
 
     // UI가 호출할 함수들
     fun startServer() {
-        serverManager.startServer()
+        viewModelScope.launch {
+            serverManager.startServer()
+        }
     }
 
     fun stopServer() {

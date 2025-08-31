@@ -7,6 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.newpractice_jetpack_compose.Ble.BleClientManager
 import com.example.newpractice_jetpack_compose.Ble.BleServerManager
 import com.example.newpractice_jetpack_compose.Ble.UuidManager
+import com.example.newpractice_jetpack_compose.MinimumDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -50,9 +51,10 @@ object AppModule {
     @Singleton // BLE 매니저들도 앱 전체에서 하나만 있으면 충분합니다.
     fun provideBleServerManager(
         @ApplicationContext context: Context,
-        uuidManager: UuidManager
+        uuidManager: UuidManager,
+        MinimumDao: MinimumDao
     ): BleServerManager {
-        return BleServerManager(context, uuidManager)
+        return BleServerManager(context, uuidManager, MinimumDao)
     }
 
     @Provides

@@ -8,9 +8,12 @@ import android.bluetooth.le.AdvertiseSettings
 import android.content.Context
 import android.os.ParcelUuid
 import android.util.Log
+import com.example.newpractice_jetpack_compose.MinimumDao
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -18,8 +21,10 @@ import javax.inject.Singleton
 @Singleton
 class BleServerManager @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val uuidManager: UuidManager
+    private val uuidManager: UuidManager,
+    private val dao: MinimumDao
 ) {
+    private var originalBluetoothName: String? = null
     private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val bluetoothAdapter = bluetoothManager.adapter
     private val advertiser = bluetoothAdapter.bluetoothLeAdvertiser
@@ -63,7 +68,7 @@ class BleServerManager @Inject constructor(
             val uuid = characteristic.uuid
             val value: ByteArray? = when (uuid) {
                 uuidManager.getUuid(uuidManager.MY_DEVICE_NAME_CHAR_UUID) ->
-                    bluetoothAdapter.name?.toByteArray(Charsets.UTF_8)
+                    bluetoothAdapter.name?.toByteArray(Charsets.UTF_8) // 광고 시 사용했던 변경된 이름을 그대로 사용
                 uuidManager.getUuid(uuidManager.MY_INTERNAL_IP_PORT_CHAR_UUID) ->
                     // TODO: 실제 내부 IP/Port 정보를 가져오는 로직 필요
                     "192.168.0.10:12345".toByteArray(Charsets.UTF_8)
@@ -104,7 +109,15 @@ class BleServerManager @Inject constructor(
         }
     }
 
-    fun startServer() {
+    suspend fun startServer() {
+        val customName = withContext(Dispatchers.IO) { // DB 조회는 IO 스레드에서 수행
+            dao.getSettingByName("custom_Device_Name")?.setting_value
+        }
+        val nameToAdvertise = customName?.takeIf { it.isNotBlank() } ?: bluetoothAdapter.name
+
+        originalBluetoothName = bluetoothAdapter.name // 광고 시작 전 이름 변경
+        bluetoothAdapter.name = nameToAdvertise
+
         if (gattServer != null) {
             Log.w("BleServer", "서버가 이미 실행 중입니다.")
             return
@@ -114,6 +127,10 @@ class BleServerManager @Inject constructor(
     }
 
     fun stopServer() {
+        originalBluetoothName?.let { // 광고 중지 후 원래 이름으로 복원
+            bluetoothAdapter.name = it
+            originalBluetoothName = null
+        }
         try {
             advertiser.stopAdvertising(advertiseCallback)
         } catch (e: Exception) {
