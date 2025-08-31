@@ -82,6 +82,9 @@ dependencies {
     // kotlinx-serialization 라이브러리
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 
+    // STUN을 위한 라이브러리
+    implementation("de.javawi.jstun:jstun:0.7.4")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

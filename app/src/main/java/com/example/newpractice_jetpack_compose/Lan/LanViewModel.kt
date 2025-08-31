@@ -3,6 +3,7 @@ package com.example.newpractice_jetpack_compose.Lan
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.newpractice_jetpack_compose.NetworkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -11,23 +12,23 @@ import javax.inject.Inject
 @HiltViewModel
 class LanViewModel @Inject constructor(
     private val nsdManager: NsdManager,
-    private val fileTransferManager: FileTransferManager
+    private val fileTransferManager: FileTransferManager,
+    private val networkManager: NetworkManager
 ) : ViewModel() {
 
     val discoveredServices = nsdManager.discoveredServices
     private var receiverJob: Job? = null
 
-    // 임의의 포트 번호. 실제로는 동적으로 할당하는 것이 더 좋음.
-    private val myPort = 12345
-
     fun startAdvertisingAndReceiving(deviceName: String) {
         // 이전에 실행중인 작업이 있다면 중지
         stopAdvertisingAndReceiving()
 
-        nsdManager.startAdvertising(deviceName, myPort)
+        // 동적으로 사용 가능한 포트 할당
+        val availablePort = networkManager.findAvailablePort()
+        nsdManager.startAdvertising(deviceName, availablePort)
 
         receiverJob = viewModelScope.launch {
-            fileTransferManager.startFileReceiver(myPort) { fileName, fileSize ->
+            fileTransferManager.startFileReceiver(availablePort) { fileName, fileSize ->
                 // TODO: UI에 파일 수신 완료 알림 (Toast, Snackbar 등)
             }
         }
