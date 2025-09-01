@@ -52,18 +52,21 @@ object AppModule {
     fun provideBleServerManager(
         @ApplicationContext context: Context,
         uuidManager: UuidManager,
-        MinimumDao: MinimumDao
+        MinimumDao: MinimumDao,
+        networkManager: NetworkManager
     ): BleServerManager {
-        return BleServerManager(context, uuidManager, MinimumDao)
+        return BleServerManager(context, uuidManager, MinimumDao, networkManager)
     }
 
     @Provides
     @Singleton
     fun provideBleClientManager(
         @ApplicationContext context: Context,
-        uuidManager: UuidManager
+        uuidManager: UuidManager,
+        MinimumDao: MinimumDao,
+        networkManager: NetworkManager
     ): BleClientManager {
-        return BleClientManager(context, uuidManager)
+        return BleClientManager(context, uuidManager, MinimumDao, networkManager)
     }
 }
 

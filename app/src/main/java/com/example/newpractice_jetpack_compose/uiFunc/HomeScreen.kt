@@ -302,6 +302,7 @@ fun DefaultHomeScreenView(
 //                                Toast.makeText(context, "공유할 내용이 없습니다.", Toast.LENGTH_SHORT).show()
 //                                Log.d("HomeScreen", "공유할 내용이 없어 연결만 시도합니다.")
 //                            }
+                            bleViewModel.connectToDevice(discoveredDevice)
                             Log.d("HomeScreenUI", "다음 기기가 선택되었습니다.\n기기 이름: ${discoveredDevice.name}. 기기 주소: ${discoveredDevice.address}, 기기 고유 ID: ${discoveredDevice.uniqueId}")
                         }
                         )

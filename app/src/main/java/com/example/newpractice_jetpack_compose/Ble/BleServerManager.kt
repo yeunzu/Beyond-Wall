@@ -8,7 +8,10 @@ import android.bluetooth.le.AdvertiseSettings
 import android.content.Context
 import android.os.ParcelUuid
 import android.util.Log
+import androidx.compose.runtime.rememberCoroutineScope
+import com.example.newpractice_jetpack_compose.IpPortInfo
 import com.example.newpractice_jetpack_compose.MinimumDao
+import com.example.newpractice_jetpack_compose.NetworkManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -22,8 +25,10 @@ import javax.inject.Singleton
 class BleServerManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val uuidManager: UuidManager,
-    private val dao: MinimumDao
+    private val dao: MinimumDao,
+    private val networkManager: NetworkManager
 ) {
+    private var publicIpPortInfo: IpPortInfo? = null
     private var originalBluetoothName: String? = null
     private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val bluetoothAdapter = bluetoothManager.adapter
@@ -66,15 +71,17 @@ class BleServerManager @Inject constructor(
 
         override fun onCharacteristicReadRequest(device: BluetoothDevice?, requestId: Int, offset: Int, characteristic: BluetoothGattCharacteristic) {
             val uuid = characteristic.uuid
+            // 내부 IP/Port 정보
+            val localIpPort = networkManager.getLocalNetworkInfo()?.ip + ":" + networkManager.getLocalNetworkInfo()?.port.toString()
+            // 외부 IP/Port 정보
+            val publicIpPort = publicIpPortInfo?.ip + ":" + publicIpPortInfo?.port.toString()
             val value: ByteArray? = when (uuid) {
                 uuidManager.getUuid(uuidManager.MY_DEVICE_NAME_CHAR_UUID) ->
                     bluetoothAdapter.name?.toByteArray(Charsets.UTF_8) // 광고 시 사용했던 변경된 이름을 그대로 사용
                 uuidManager.getUuid(uuidManager.MY_INTERNAL_IP_PORT_CHAR_UUID) ->
-                    // TODO: 실제 내부 IP/Port 정보를 가져오는 로직 필요
-                    "192.168.0.10:12345".toByteArray(Charsets.UTF_8)
+                    localIpPort.toByteArray(Charsets.UTF_8)
                 uuidManager.getUuid(uuidManager.MY_EXTERNAL_IP_PORT_CHAR_UUID) ->
-                    // TODO: 실제 외부 IP/Port 정보를 가져오는 로직 필요
-                    "121.122.123.124:54321".toByteArray(Charsets.UTF_8)
+                    publicIpPort.toByteArray(Charsets.UTF_8)
                 else -> null
             }
 
@@ -117,6 +124,8 @@ class BleServerManager @Inject constructor(
 
         originalBluetoothName = bluetoothAdapter.name // 광고 시작 전 이름 변경
         bluetoothAdapter.name = nameToAdvertise
+
+        publicIpPortInfo = networkManager.getPublicIpPortInfo() // 공인 IP와 Port를 담는 변수(코루틴 때문에 여기에 지정)
 
         if (gattServer != null) {
             Log.w("BleServer", "서버가 이미 실행 중입니다.")

@@ -10,11 +10,19 @@ import android.content.Context
 import android.os.Build
 import android.os.ParcelUuid
 import android.util.Log
+import com.example.newpractice_jetpack_compose.MinimumDao
+import com.example.newpractice_jetpack_compose.NetworkManager
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.lang.reflect.Method
 import java.util.*
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -26,8 +34,13 @@ fun ByteArray.toHexString(): String = joinToString("") { "%02x".format(it) }
 @Singleton
 class BleClientManager @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val uuidManager: UuidManager
+    private val uuidManager: UuidManager,
+    private val dao: MinimumDao,
+    private val networkManager: NetworkManager
 ) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO) // Manager 자체의 CoroutineScope 생성
+    private var preparedWriteData: Map<String, String>? = null // 서버에 쓸(Write) 데이터를 미리 준비해서 담아둘 변수 정의
+
     private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val bluetoothAdapter = bluetoothManager.adapter
     private val scanner = bluetoothAdapter.bluetoothLeScanner
@@ -80,6 +93,7 @@ class BleClientManager @Inject constructor(
 
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
+                gatt.requestMtu(517) // Mtu 확장
                 Log.d("BleClient", "서버에 연결됨, 서비스 탐색 시작")
                 gatt.discoverServices()
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
@@ -147,15 +161,22 @@ class BleClientManager @Inject constructor(
         }
 
         private fun startWriteSequence(gatt: BluetoothGatt) {
-            val myName = bluetoothAdapter.name ?: "Unknown"
+            val dataToWrite = preparedWriteData
+            if (dataToWrite == null) {
+                Log.e("BleClient", "전송할 데이터가 준비되지 않았습니다.")
+                disconnect()
+                return
+            }
+
+            val myName = dataToWrite["my_Custom_Name"] ?: bluetoothAdapter.name ?: "Unknown" // TODO: 여기에 DB에서 커스텀 기기 이름 가져와야 함
             // TODO: 실제 IP/Port 정보 가져오는 로직 필요
-            val myInternalIp = "192.168.0.20:12345"
-            val myExternalIp = "211.212.213.214:54321"
+            val myInternalIpPort: String = dataToWrite["myInternalInfo"] ?: "Unknown"
+            val myExternalIpPort: String = dataToWrite["myExternalInfo"] ?: "Unknown"
 
             writeQueue.add(uuidManager.getUuid(uuidManager.YOUR_DEVICE_NAME_CHAR_UUID) to myName.toByteArray(Charsets.UTF_8))
             writeQueue.add(uuidManager.getUuid(uuidManager.YOUR_DEVICE_UNIQUE_ID_CHAR_UUID) to uuidManager.DEVICE_UNIQUE_UUID)
-            writeQueue.add(uuidManager.getUuid(uuidManager.YOUR_DEVICE_INTERNAL_IP_PORT_CHAR_UUID) to myInternalIp.toByteArray(Charsets.UTF_8))
-            writeQueue.add(uuidManager.getUuid(uuidManager.YOUR_DEVICE_EXTERNAL_IP_PORT_CHAR_UUID) to myExternalIp.toByteArray(Charsets.UTF_8))
+            writeQueue.add(uuidManager.getUuid(uuidManager.YOUR_DEVICE_INTERNAL_IP_PORT_CHAR_UUID) to myInternalIpPort.toByteArray(Charsets.UTF_8))
+            writeQueue.add(uuidManager.getUuid(uuidManager.YOUR_DEVICE_EXTERNAL_IP_PORT_CHAR_UUID) to myExternalIpPort.toByteArray(Charsets.UTF_8))
 
             // 첫 쓰기 작업 시작
             if (writeQueue.isNotEmpty()) {
@@ -198,8 +219,52 @@ class BleClientManager @Inject constructor(
             return
         }
         stopScan()
-        gatt = device.device.connectGatt(context, false, gattCallback)
-        Log.d("BleClient", "${device.address}에 연결 시도")
+
+        // 코루틴을 시작해서 연결에 필요한 모든 정보를 미리 준비
+        scope.launch {
+            Log.d("BleClient", "연결 준비 시작: 내 정보 가져오는 중...")
+            // DB에서 커스텀 이름 가져오기
+            val myCustomName = dao.getSettingByName("custom_Device_Name")?.setting_value ?: bluetoothAdapter.name ?: "Unknown"
+
+            // NetworkManager에서 내 IP/Port 정보 가져오기
+            val myInternalInfo = networkManager.getLocalNetworkInfo()
+            val myPublicInfo = networkManager.getPublicIpPortInfo()
+
+            // 서버에 쓸(Write) 데이터 맵(Map)을 미리 만들어 둠
+            preparedWriteData = mapOf(
+                "my_Custom_Name" to myCustomName,
+                "myInternalInfo" to "${myInternalInfo?.ip}:${myInternalInfo?.port}",
+                "myExternalInfo" to "${myPublicInfo?.ip}:${myPublicInfo?.port}"
+            )
+
+            Log.d("BleClient", "연결 준비 완료. GATT 연결 시작")
+
+            // 모든 정보가 준비되면 Main 스레드에서 실제 GATT 연결 시작
+            withContext(Dispatchers.Main) {
+                // gatt = device.device.connectGatt(context, false, gattCallback)
+                // 💥 수정된 부분: 리플렉션을 사용하여 캐시 없이 연결
+                gatt = try {
+                    val connectGattMethod: Method = device.device.javaClass.getMethod(
+                        "connectGatt",
+                        Context::class.java,
+                        Boolean::class.java,
+                        BluetoothGattCallback::class.java,
+                        Int::class.java
+                    )
+                    connectGattMethod.invoke(
+                        device.device,
+                        context,
+                        false,
+                        gattCallback,
+                        BluetoothDevice.TRANSPORT_LE
+                    ) as BluetoothGatt
+                } catch (e: Exception) {
+                    Log.e("BleClient", "리플렉션 connectGatt 호출 실패, 일반 방식으로 시도", e)
+                    device.device.connectGatt(context, false, gattCallback)
+                }
+                Log.d("BleClient", "${device.address}에 연결 시도")
+            }
+        }
     }
 
     fun disconnect() {

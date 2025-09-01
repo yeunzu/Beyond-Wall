@@ -56,7 +56,7 @@ class NetworkManager @Inject constructor(
     fun findAvailablePort(): Int {
         // ServerSocket에 port 0을 전달하면 OS가 사용 가능한 포트를 자동으로 할당해줍니다.
         val canUsePort = ServerSocket(0).use { it.localPort }
-        Log.d("NetworkManager", "기기에서 사용 가능한 주소 : $canUsePort")
+        Log.d("NetworkManager", "기기에서 사용 가능한 포트 : $canUsePort")
         return canUsePort
     }
 
@@ -70,21 +70,23 @@ class NetworkManager @Inject constructor(
      * P2P 통신을 위해 공개 STUN 서버에서 공인 IP 정보를 가져오는 함수
      * @return PublicIpInfo(IP, Port) 또는 실패 시 null
      */
-    suspend fun getPublicIpInfo(): IpPortInfo? = withContext(Dispatchers.IO) {
+    suspend fun getPublicIpPortInfo(): IpPortInfo? = withContext(Dispatchers.IO) {
         // 1. 로컬 IP 주소 확인
-        val localIpAddress = getLocalIpAddress()
-        if (localIpAddress == null) {
-            Log.e("NetworkManager", "STUN 요청 실패: 유효한 로컬 IP 주소를 찾을 수 없습니다.")
-            return@withContext null
-        }
+        // val localIpAddress = getLocalIpAddress()
+        val localInetAddress = InetAddress.getByName("0.0.0.0")
 
-        val localInetAddress: InetAddress
-        try {
-            localInetAddress = InetAddress.getByName(localIpAddress)
-        } catch (e: Exception) {
-            Log.e("NetworkManager", "STUN 요청 실패: 로컬 IP 주소 변환 중 오류 발생.", e)
-            return@withContext null
-        }
+//        if (localIpAddress == null) {
+//            Log.e("NetworkManager", "STUN 요청 실패: 유효한 로컬 IP 주소를 찾을 수 없습니다.")
+//            return@withContext null
+//        }
+
+//        val localInetAddress: InetAddress
+//        try {
+//            localInetAddress = InetAddress.getByName(localIpAddress)
+//        } catch (e: Exception) {
+//            Log.e("NetworkManager", "STUN 요청 실패: 로컬 IP 주소 변환 중 오류 발생.", e)
+//            return@withContext null
+//        }
 
         // 2. STUN 요청에 사용할 로컬 포트를 동적으로 할당
         val localPort = findAvailablePort()
